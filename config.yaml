@@ -1,0 +1,27 @@
+vocabulario:
+  dinamicos: []   # ex: ["oi", "obrigado", "ajuda", "sim", "nao"]
+  estaticos: []   # ex: ["A", "B", "C", "paz", "amor"]
+
+pipeline:
+  n_frames: 30           # janela temporal (frames por amostra)
+  n_features: 258        # 63 (mao_esq) + 63 (mao_dir) + 132 (pose)
+  fps_alvo: 15           # FPS para re-amostragem dos vídeos de entrada
+  limiar_confianca: 0.7  # min_detection_confidence e min_tracking_confidence
+
+mediapipe:
+  model_complexity: 1    # 0=leve, 1=balanceado, 2=preciso
+  smooth_landmarks: true
+
+paths:
+  raw: dataset/raw
+  landmarks: dataset/landmarks
+  splits: dataset/splits
+
+splits:
+  treino: 0.80
+  validacao: 0.10
+  teste: 0.10
+  random_state: 42
+
+amostras_minimas_por_classe: 30
+formatos_validos: ["mp4", "mov", "avi"]

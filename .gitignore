@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Dataset — vídeos brutos (não commitar, podem ter gigabytes)
+dataset/raw/dinamicos/
+dataset/raw/estaticos/
+
+# Arquivos gerados pelos scripts (reproduzíveis a partir dos vídeos)
+dataset/landmarks/
+dataset/splits/
+
+# IDEs
+.vscode/
+.idea/
