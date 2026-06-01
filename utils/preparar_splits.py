@@ -91,7 +91,7 @@ def main():
     print(f"  Treino     : {len(X_train)} amostras")
     print(f"  Validacao  : {len(X_val)} amostras")
     print(f"  Teste      : {len(X_test)} amostras")
-    print(f"  classes.json: {len(classes)} classes → {classes}")
+    print(f"  classes.json: {len(classes)} classes: {classes}")
 
 
 if __name__ == "__main__":
