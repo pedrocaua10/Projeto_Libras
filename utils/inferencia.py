@@ -100,7 +100,7 @@ class Pipeline:
         X = np.array(buf, dtype=np.float32).reshape(1, N_FRAMES, N_FEATURES)
         X = (X - self.mean) / self.std
 
-        probs = self.modelo.predict(X, verbose=0)[0]
+        probs = self.modelo(X, training=False).numpy()[0]
         idx_top = int(probs.argmax())
         confianca = float(probs[idx_top])
         classe = self.classes[idx_top]
