@@ -40,25 +40,26 @@ def baixar_modelo():
 
 
 def extrair_frame_landmarks(result) -> np.ndarray:
-    """Extrai landmarks de mao esquerda, mao direita e pose: shape (258,)."""
+    """Extrai landmarks de mao esquerda, mao direita e pose: shape (258,).
+    Na Tasks API, result.*_landmarks e uma lista plana de NormalizedLandmark (sem nesting)."""
     mao_esq = np.zeros(21 * 3, dtype=np.float32)
     mao_dir = np.zeros(21 * 3, dtype=np.float32)
     pose = np.zeros(33 * 4, dtype=np.float32)
 
     if result.left_hand_landmarks:
         mao_esq = np.array(
-            [[lm.x, lm.y, lm.z] for lm in result.left_hand_landmarks[0]]
+            [[lm.x, lm.y, lm.z] for lm in result.left_hand_landmarks]
         ).flatten().astype(np.float32)
 
     if result.right_hand_landmarks:
         mao_dir = np.array(
-            [[lm.x, lm.y, lm.z] for lm in result.right_hand_landmarks[0]]
+            [[lm.x, lm.y, lm.z] for lm in result.right_hand_landmarks]
         ).flatten().astype(np.float32)
 
     if result.pose_landmarks:
         pose = np.array(
             [[lm.x, lm.y, lm.z, lm.visibility]
-             for lm in result.pose_landmarks[0]]
+             for lm in result.pose_landmarks]
         ).flatten().astype(np.float32)
 
     return np.concatenate([mao_esq, mao_dir, pose])
