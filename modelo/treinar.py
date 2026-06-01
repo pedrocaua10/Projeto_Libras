@@ -280,6 +280,10 @@ def main():
         zero_division=0,
     ))
 
+    with open(MODELO_DIR / "classes_modelo.json", "w", encoding="utf-8") as f:
+        json.dump(nomes, f, ensure_ascii=False, indent=2)
+    print(f"  classes_modelo.json: {nomes}")
+
     plotar_historico(hist, MODELO_DIR / f"historico_{args.arq}.png")
     plotar_matriz_confusao(y_test, y_pred, nomes,
                            MODELO_DIR / f"matriz_confusao_{args.arq}.png")
