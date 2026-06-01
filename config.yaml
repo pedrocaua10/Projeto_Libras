@@ -1,6 +1,97 @@
 vocabulario:
-  dinamicos: []   # ex: ["oi", "obrigado", "ajuda", "sim", "nao"]
-  estaticos: []   # ex: ["A", "B", "C", "paz", "amor"]
+  # Letras estáticas do alfabeto (imagens HEIC/JPG da colega)
+  estaticos:
+    - A
+    - B
+    - C
+    - D
+    - E
+    - F
+    - G
+    - I
+    - L
+    - M
+    - N
+    - O
+    - P
+    - Q
+    - R
+    - S
+    - T
+    - U
+    - V
+    - W
+    - vazio
+  # Sinais com movimento: palavras cotidianas + emergência + letras dinâmicas
+  dinamicos:
+    # ModuloII — cotidiano
+    - amanha
+    - beber
+    - boa_noite
+    - boa_tarde
+    - bom_dia
+    - casa
+    - comer
+    - com_licenca
+    - como_voce_esta
+    - de_nada
+    - de_onde_voce_e
+    - desculpa
+    - escola
+    - estudar
+    - hoje
+    - ir
+    - mais_devagar
+    - nao
+    - nao_entendi
+    - obrigado
+    - oi
+    - ontem
+    - pode_repetir
+    - por_favor
+    - prazer_em_conhecer
+    - qual_o_seu_nome
+    - sim
+    - tchau
+    - trabalhar
+    - tudo_bem
+    - vir
+    - voce_conhece_libras
+    - voltar
+    # ModuloIII — emergência / saúde
+    - acidente
+    - alergia
+    - ambulancia
+    - bombeiro
+    - dor
+    - dor_de_cabeca
+    - dor_no_peito
+    - estou_com_medo
+    - estou_passando_mal
+    - estou_perdido
+    - estou_preocupado
+    - estou_sozinho
+    - incendio
+    - ir_ao_medico
+    - ir_para_o_hospital
+    - ligar_190
+    - ligar_192
+    - ligar_193
+    - me_acompanhe
+    - medicamento
+    - nao_consigo_respirar
+    - nao_estou_bem
+    - perigo
+    - policia
+    - preciso_de_ajuda
+    - socorro
+    # Movimento — letras que exigem movimento
+    - H
+    - J
+    - X
+    - Y
+    - Z
+    - vazio
 
 pipeline:
   n_frames: 30           # janela temporal (frames por amostra)
@@ -24,4 +115,5 @@ splits:
   random_state: 42
 
 amostras_minimas_por_classe: 30
-formatos_validos: ["mp4", "mov", "avi"]
+# jpg/jpeg adicionados para suportar imagens importadas do dataset estático
+formatos_validos: ["mp4", "mov", "avi", "jpg", "jpeg", "png"]

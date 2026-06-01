@@ -1,4 +1,4 @@
-"""Extrai landmarks MediaPipe de todos os vídeos em dataset/raw/ e salva como .npy."""
+"""Extrai landmarks MediaPipe de vídeos e imagens em dataset/raw/ e salva como .npy."""
 
 import sys
 import yaml
@@ -10,6 +10,9 @@ from tqdm import tqdm
 from datetime import datetime
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+
+FORMATOS_VIDEO = {"mp4", "mov", "avi"}
+FORMATOS_IMAGEM = {"jpg", "jpeg", "png"}
 
 
 def carregar_config() -> dict:
@@ -39,6 +42,19 @@ def extrair_frame_landmarks(results) -> np.ndarray:
         ).flatten()
 
     return np.concatenate([mao_esq, mao_dir, pose])
+
+
+def processar_imagem(
+    caminho: Path, n_frames: int, n_features: int, holistic
+) -> np.ndarray | None:
+    """Lê imagem estática, extrai landmarks e tila para shape (n_frames, n_features)."""
+    img = cv2.imread(str(caminho))
+    if img is None:
+        return None
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    rgb.flags.writeable = False
+    vetor = extrair_frame_landmarks(holistic.process(rgb))
+    return np.tile(vetor, (n_frames, 1)).astype(np.float32)
 
 
 def processar_video_dinamico(
@@ -99,8 +115,8 @@ def processar_video_estatico(
     return np.tile(vetor, (n_frames, 1)).astype(np.float32)
 
 
-def coletar_videos(raw: Path, formatos: set) -> list[tuple[Path, str, str]]:
-    videos = []
+def coletar_arquivos(raw: Path, formatos: set) -> list[tuple[Path, str, str]]:
+    arquivos = []
     for tipo in ["dinamicos", "estaticos"]:
         pasta_tipo = raw / tipo
         if not pasta_tipo.exists():
@@ -110,8 +126,8 @@ def coletar_videos(raw: Path, formatos: set) -> list[tuple[Path, str, str]]:
                 continue
             for arquivo in sorted(sinal.iterdir()):
                 if arquivo.is_file() and arquivo.suffix.lstrip(".").lower() in formatos:
-                    videos.append((arquivo, tipo, sinal.name))
-    return videos
+                    arquivos.append((arquivo, tipo, sinal.name))
+    return arquivos
 
 
 def main():
@@ -126,9 +142,9 @@ def main():
     complexidade = cfg["mediapipe"]["model_complexity"]
     smooth = cfg["mediapipe"]["smooth_landmarks"]
 
-    videos = coletar_videos(raw, formatos)
-    if not videos:
-        print("Nenhum video encontrado. Execute validar_dataset.py para verificar a estrutura.")
+    arquivos = coletar_arquivos(raw, formatos)
+    if not arquivos:
+        print("Nenhum arquivo encontrado. Execute importar_dataset.py e validar_dataset.py primeiro.")
         sys.exit(1)
 
     landmarks_base.mkdir(parents=True, exist_ok=True)
@@ -137,6 +153,8 @@ def main():
     contadores = {"ok": 0, "erros": 0}
     amostras_por_sinal: dict[str, int] = {}
 
+    # static_image_mode=True para imagens, False para vídeos — usamos False para reutilizar o
+    # objeto em todo o loop; para imagens estáticas isso é aceitável pois não há tracking entre frames
     holistic = mp.solutions.holistic.Holistic(
         static_image_mode=False,
         model_complexity=complexidade,
@@ -148,14 +166,18 @@ def main():
     with open(log_path, "w", encoding="utf-8") as log_f:
         log_f.write(f"Extracao iniciada: {datetime.now().isoformat()}\n\n")
 
-        for caminho, tipo, sinal in tqdm(videos, desc="Extraindo landmarks", unit="video"):
+        for caminho, tipo, sinal in tqdm(arquivos, desc="Extraindo landmarks", unit="arquivo"):
             chave = f"{tipo}/{sinal}"
             idx_amostra = amostras_por_sinal.get(chave, 0)
             pasta_saida = landmarks_base / tipo / sinal
             pasta_saida.mkdir(parents=True, exist_ok=True)
 
             try:
-                if tipo == "estaticos":
+                ext = caminho.suffix.lstrip(".").lower()
+
+                if ext in FORMATOS_IMAGEM:
+                    seq = processar_imagem(caminho, n_frames, n_features, holistic)
+                elif tipo == "estaticos":
                     seq = processar_video_estatico(caminho, n_frames, n_features, holistic)
                 else:
                     seq = processar_video_dinamico(caminho, n_frames, n_features, holistic, fps_alvo)
