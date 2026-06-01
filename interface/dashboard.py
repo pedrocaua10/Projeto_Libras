@@ -140,9 +140,8 @@ class Dashboard:
         self.lbl_status.pack(anchor="w", pady=(4, 0))
 
         # ── Coluna direita: predição ───────────────────────────────────────────
-        col_pred = tk.Frame(main, bg=COR_FUNDO, width=280)
-        col_pred.grid(row=1, column=1, sticky="n")
-        col_pred.pack_propagate(False)
+        col_pred = tk.Frame(main, bg=COR_FUNDO)
+        col_pred.grid(row=1, column=1, sticky="n", padx=(0, 0))
 
         # — Painel: sinal atual ————————————────────────────────────————————————
         painel_sinal = tk.Frame(col_pred, bg=COR_PAINEL, padx=16, pady=16)
@@ -165,7 +164,7 @@ class Dashboard:
 
         # Barra de confiança principal
         self.barra_conf = ttk.Progressbar(
-            painel_sinal, length=240, mode="determinate", maximum=100
+            painel_sinal, length=260, mode="determinate", maximum=100
         )
         self.barra_conf.pack(fill="x", pady=(6, 0))
 
@@ -183,7 +182,7 @@ class Dashboard:
             lbl_nome = tk.Label(row, text="", width=10, anchor="w",
                                 font=fonte_normal, bg=COR_PAINEL, fg=COR_TEXTO)
             lbl_nome.pack(side="left")
-            barra = ttk.Progressbar(row, length=140, mode="determinate", maximum=100)
+            barra = ttk.Progressbar(row, length=150, mode="determinate", maximum=100)
             barra.pack(side="left", padx=(4, 4))
             lbl_pct = tk.Label(row, text="", width=5, anchor="e",
                                font=fonte_normal, bg=COR_PAINEL, fg=COR_SUBTEXT)
