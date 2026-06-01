@@ -54,6 +54,29 @@ def normalizar(X_train, X_val, X_test):
     return (X_train - mean) / std, (X_val - mean) / std, (X_test - mean) / std
 
 
+def filtrar_classes(X_train, X_val, X_test, y_train, y_val, y_test, nomes, min_n):
+    """Remove classes com menos de min_n amostras no conjunto de treino."""
+    classes, contagens = np.unique(y_train, return_counts=True)
+    classes_ok = classes[contagens >= min_n]
+    print(f"  Filtrando: {len(classes_ok)}/{len(classes)} classes com >= {min_n} amostras no treino")
+
+    def filtrar(X, y):
+        mask = np.isin(y, classes_ok)
+        return X[mask], y[mask]
+
+    X_train, y_train = filtrar(X_train, y_train)
+    X_val,   y_val   = filtrar(X_val,   y_val)
+    X_test,  y_test  = filtrar(X_test,  y_test)
+
+    # Remapeia labels para range contíguo 0..N-1
+    mapa = {int(old): new for new, old in enumerate(sorted(classes_ok))}
+    y_train = np.array([mapa[y] for y in y_train], dtype=np.int64)
+    y_val   = np.array([mapa[y] for y in y_val],   dtype=np.int64)
+    y_test  = np.array([mapa[y] for y in y_test],  dtype=np.int64)
+    nomes_f = [nomes[int(c)] for c in sorted(classes_ok)]
+    return X_train, X_val, X_test, y_train, y_val, y_test, nomes_f
+
+
 def aumentar_dados(X, y, min_amostras: int = 30, seed: int = 42):
     """Upsampling de classes minoritárias com ruído gaussiano leve."""
     rng = np.random.default_rng(seed)
@@ -147,6 +170,9 @@ def main():
     parser.add_argument("--batch",   type=int,   default=32)
     parser.add_argument("--no-aug",  action="store_true",
                         help="Desativa data augmentation")
+    parser.add_argument("--min-amostras-reais", type=int, default=0,
+                        help="Remove classes com menos de N amostras reais no treino "
+                             "(ex: 20 mantém só as letras estáticas com dados suficientes)")
     args = parser.parse_args()
 
     tf.random.set_seed(42)
@@ -159,6 +185,14 @@ def main():
     n_features = X_train.shape[2]
     print(f"  Treino={len(X_train)} | Val={len(X_val)} | Teste={len(X_test)}")
     print(f"  {n_classes} classes | {n_frames} frames | {n_features} features/frame")
+
+    if args.min_amostras_reais > 0:
+        print(f"Filtrando classes com < {args.min_amostras_reais} amostras reais...")
+        X_train, X_val, X_test, y_train, y_val, y_test, nomes = filtrar_classes(
+            X_train, X_val, X_test, y_train, y_val, y_test, nomes, args.min_amostras_reais
+        )
+        n_classes = len(nomes)
+        print(f"  {len(X_train)} treino | {len(X_val)} val | {len(X_test)} teste | {n_classes} classes")
 
     print("Normalizando (z-score)...")
     X_train, X_val, X_test = normalizar(X_train, X_val, X_test)
@@ -208,8 +242,13 @@ def main():
     print(f"  Modelo salvo: {caminho_final.name}")
 
     y_pred = modelo.predict(X_test, verbose=0).argmax(axis=1)
-    print("\nRelatorio por classe (top classes):")
-    print(classification_report(y_test, y_pred, target_names=nomes, zero_division=0))
+    print("\nRelatorio por classe:")
+    print(classification_report(
+        y_test, y_pred,
+        target_names=nomes,
+        labels=list(range(n_classes)),
+        zero_division=0,
+    ))
 
     plotar_historico(hist, MODELO_DIR / f"historico_{args.arq}.png")
     plotar_matriz_confusao(y_test, y_pred, nomes,
