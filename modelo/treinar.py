@@ -20,7 +20,7 @@ from sklearn.utils.class_weight import compute_class_weight
 from sklearn.metrics import classification_report, confusion_matrix
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, GRU, Dense, Dropout
+from tensorflow.keras.layers import LSTM, GRU, Dense, Dropout, GlobalAveragePooling1D
 from tensorflow.keras.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
@@ -52,6 +52,17 @@ def normalizar(X_train, X_val, X_test):
     np.save(MODELO_DIR / "scaler_mean.npy", mean)
     np.save(MODELO_DIR / "scaler_std.npy",  std)
     return (X_train - mean) / std, (X_val - mean) / std, (X_test - mean) / std
+
+
+def filtrar_zeros(X, y, limiar: float = 0.005):
+    """Remove amostras onde MediaPipe nao detectou nada (vetor quase todo zero).
+    Essas amostras adicionam ruido sem informacao util."""
+    magnitudes = np.abs(X).mean(axis=(1, 2))
+    mask = magnitudes > limiar
+    removidos = (~mask).sum()
+    if removidos:
+        print(f"  Removidos {removidos} amostras com landmarks zerados ({removidos/len(X)*100:.1f}%)")
+    return X[mask], y[mask]
 
 
 def filtrar_classes(X_train, X_val, X_test, y_train, y_val, y_test, nomes, min_n):
@@ -105,19 +116,33 @@ def aumentar_dados(X, y, min_amostras: int = 30, seed: int = 42):
 
 
 def construir_modelo(arq: str, n_frames: int, n_features: int, n_classes: int):
-    Camada = LSTM if arq == "lstm" else GRU
-    model = Sequential(
-        [
-            Camada(128, return_sequences=True, input_shape=(n_frames, n_features)),
-            Dropout(0.3),
-            Camada(64),
-            Dropout(0.3),
-            Dense(64, activation="relu"),
-            Dropout(0.2),
-            Dense(n_classes, activation="softmax"),
-        ],
-        name=f"tradutor_{arq}",
-    )
+    if arq == "dense":
+        # Para sinais estáticos (frames idênticos): média temporal + rede densa
+        model = Sequential(
+            [
+                GlobalAveragePooling1D(input_shape=(n_frames, n_features)),
+                Dense(256, activation="relu"),
+                Dropout(0.4),
+                Dense(128, activation="relu"),
+                Dropout(0.3),
+                Dense(n_classes, activation="softmax"),
+            ],
+            name="tradutor_dense",
+        )
+    else:
+        Camada = LSTM if arq == "lstm" else GRU
+        model = Sequential(
+            [
+                Camada(128, return_sequences=True, input_shape=(n_frames, n_features)),
+                Dropout(0.3),
+                Camada(64),
+                Dropout(0.3),
+                Dense(64, activation="relu"),
+                Dropout(0.2),
+                Dense(n_classes, activation="softmax"),
+            ],
+            name=f"tradutor_{arq}",
+        )
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
         loss="sparse_categorical_crossentropy",
@@ -164,7 +189,7 @@ def plotar_matriz_confusao(y_true, y_pred, nomes: list, caminho: Path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arq",     choices=["lstm", "gru"], default="lstm",
+    parser.add_argument("--arq",     choices=["lstm", "gru", "dense"], default="lstm",
                         help="Arquitetura recorrente (padrao: lstm)")
     parser.add_argument("--epochs",  type=int,   default=100)
     parser.add_argument("--batch",   type=int,   default=32)
@@ -185,6 +210,11 @@ def main():
     n_features = X_train.shape[2]
     print(f"  Treino={len(X_train)} | Val={len(X_val)} | Teste={len(X_test)}")
     print(f"  {n_classes} classes | {n_frames} frames | {n_features} features/frame")
+
+    print("Removendo amostras sem landmarks detectados...")
+    X_train, y_train = filtrar_zeros(X_train, y_train)
+    X_val,   y_val   = filtrar_zeros(X_val,   y_val)
+    X_test,  y_test  = filtrar_zeros(X_test,  y_test)
 
     if args.min_amostras_reais > 0:
         print(f"Filtrando classes com < {args.min_amostras_reais} amostras reais...")
