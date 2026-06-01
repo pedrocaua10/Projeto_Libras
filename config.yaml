@@ -98,7 +98,7 @@ pipeline:
   n_frames: 30           # janela temporal (frames por amostra)
   n_features: 258        # 63 (mao_esq) + 63 (mao_dir) + 132 (pose)
   fps_alvo: 15           # FPS para re-amostragem dos vídeos de entrada
-  limiar_confianca: 0.7  # min_detection_confidence e min_tracking_confidence
+  limiar_confianca: 0.3  # min_detection_confidence (0.3 = mais sensível para poses e mãos)
 
 mediapipe:
   model_complexity: 1    # 0=leve, 1=balanceado, 2=preciso

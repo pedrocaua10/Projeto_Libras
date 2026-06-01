@@ -1,15 +1,26 @@
 """Extrai landmarks MediaPipe de vídeos e imagens em dataset/raw/ e salva como .npy."""
 
 import sys
+import urllib.request
 import yaml
 import cv2
 import numpy as np
 import mediapipe as mp
+
+BaseOptions = mp.tasks.BaseOptions
+HolisticLandmarker = mp.tasks.vision.HolisticLandmarker
+HolisticLandmarkerOptions = mp.tasks.vision.HolisticLandmarkerOptions
+RunningMode = mp.tasks.vision.RunningMode
 from pathlib import Path
 from tqdm import tqdm
 from datetime import datetime
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+MODEL_PATH = Path(__file__).parent.parent / "modelo" / "holistic_landmarker.task"
+MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/"
+    "holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task"
+)
 
 FORMATOS_VIDEO = {"mp4", "mov", "avi"}
 FORMATOS_IMAGEM = {"jpg", "jpeg", "png"}
@@ -20,45 +31,63 @@ def carregar_config() -> dict:
         return yaml.safe_load(f)
 
 
-def extrair_frame_landmarks(results) -> np.ndarray:
-    """Concatena landmarks de mao esquerda, mao direita e pose em vetor (258,)."""
-    mao_esq = np.zeros(21 * 3)
-    mao_dir = np.zeros(21 * 3)
-    pose = np.zeros(33 * 4)
+def baixar_modelo():
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not MODEL_PATH.exists():
+        print(f"Baixando modelo holistic (~50 MB)...")
+        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+        print(f"Modelo salvo em {MODEL_PATH}")
 
-    if results.left_hand_landmarks:
+
+def extrair_frame_landmarks(result) -> np.ndarray:
+    """Extrai landmarks de mao esquerda, mao direita e pose: shape (258,)."""
+    mao_esq = np.zeros(21 * 3, dtype=np.float32)
+    mao_dir = np.zeros(21 * 3, dtype=np.float32)
+    pose = np.zeros(33 * 4, dtype=np.float32)
+
+    if result.left_hand_landmarks:
         mao_esq = np.array(
-            [[lm.x, lm.y, lm.z] for lm in results.left_hand_landmarks.landmark]
-        ).flatten()
+            [[lm.x, lm.y, lm.z] for lm in result.left_hand_landmarks[0]]
+        ).flatten().astype(np.float32)
 
-    if results.right_hand_landmarks:
+    if result.right_hand_landmarks:
         mao_dir = np.array(
-            [[lm.x, lm.y, lm.z] for lm in results.right_hand_landmarks.landmark]
-        ).flatten()
+            [[lm.x, lm.y, lm.z] for lm in result.right_hand_landmarks[0]]
+        ).flatten().astype(np.float32)
 
-    if results.pose_landmarks:
+    if result.pose_landmarks:
         pose = np.array(
-            [[lm.x, lm.y, lm.z, lm.visibility] for lm in results.pose_landmarks.landmark]
-        ).flatten()
+            [[lm.x, lm.y, lm.z, lm.visibility]
+             for lm in result.pose_landmarks[0]]
+        ).flatten().astype(np.float32)
 
     return np.concatenate([mao_esq, mao_dir, pose])
 
 
+def frame_para_mp_image(frame_bgr: np.ndarray) -> mp.Image:
+    # Redimensiona para 640x480 — MediaPipe é otimizado para essa resolução
+    # e imagens HEIC convertidas chegam em 3088x1737 (muito lentas sem resize)
+    h, w = frame_bgr.shape[:2]
+    if w > 640 or h > 480:
+        frame_bgr = cv2.resize(frame_bgr, (640, 480))
+    rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    return mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+
+
 def processar_imagem(
-    caminho: Path, n_frames: int, n_features: int, holistic
+    caminho: Path, n_frames: int, n_features: int, landmarker
 ) -> np.ndarray | None:
-    """Lê imagem estática, extrai landmarks e tila para shape (n_frames, n_features)."""
+    """Lê imagem, extrai landmarks e tila para shape (n_frames, n_features)."""
     img = cv2.imread(str(caminho))
     if img is None:
         return None
-    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    rgb.flags.writeable = False
-    vetor = extrair_frame_landmarks(holistic.process(rgb))
+    result = landmarker.detect(frame_para_mp_image(img))
+    vetor = extrair_frame_landmarks(result)
     return np.tile(vetor, (n_frames, 1)).astype(np.float32)
 
 
 def processar_video_dinamico(
-    caminho: Path, n_frames: int, n_features: int, holistic, fps_alvo: int
+    caminho: Path, n_frames: int, n_features: int, landmarker, fps_alvo: int
 ) -> np.ndarray | None:
     cap = cv2.VideoCapture(str(caminho))
     if not cap.isOpened():
@@ -74,9 +103,8 @@ def processar_video_dinamico(
         if not ret:
             break
         if idx % intervalo == 0:
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            rgb.flags.writeable = False
-            frames.append(extrair_frame_landmarks(holistic.process(rgb)))
+            result = landmarker.detect(frame_para_mp_image(frame))
+            frames.append(extrair_frame_landmarks(result))
         idx += 1
     cap.release()
 
@@ -93,7 +121,7 @@ def processar_video_dinamico(
 
 
 def processar_video_estatico(
-    caminho: Path, n_frames: int, n_features: int, holistic
+    caminho: Path, n_frames: int, n_features: int, landmarker
 ) -> np.ndarray | None:
     cap = cv2.VideoCapture(str(caminho))
     if not cap.isOpened():
@@ -107,10 +135,8 @@ def processar_video_estatico(
     if not ret:
         return None
 
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    rgb.flags.writeable = False
-    vetor = extrair_frame_landmarks(holistic.process(rgb))
-
+    result = landmarker.detect(frame_para_mp_image(frame))
+    vetor = extrair_frame_landmarks(result)
     # Repete o frame para manter shape (n_frames, n_features) igual aos dinamicos
     return np.tile(vetor, (n_frames, 1)).astype(np.float32)
 
@@ -139,8 +165,8 @@ def main():
     fps_alvo = cfg["pipeline"]["fps_alvo"]
     limiar = cfg["pipeline"]["limiar_confianca"]
     formatos = set(cfg["formatos_validos"])
-    complexidade = cfg["mediapipe"]["model_complexity"]
-    smooth = cfg["mediapipe"]["smooth_landmarks"]
+
+    baixar_modelo()
 
     arquivos = coletar_arquivos(raw, formatos)
     if not arquivos:
@@ -153,47 +179,44 @@ def main():
     contadores = {"ok": 0, "erros": 0}
     amostras_por_sinal: dict[str, int] = {}
 
-    # static_image_mode=True para imagens, False para vídeos — usamos False para reutilizar o
-    # objeto em todo o loop; para imagens estáticas isso é aceitável pois não há tracking entre frames
-    holistic = mp.solutions.holistic.Holistic(
-        static_image_mode=False,
-        model_complexity=complexidade,
-        smooth_landmarks=smooth,
-        min_detection_confidence=limiar,
-        min_tracking_confidence=limiar,
+    options = HolisticLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=str(MODEL_PATH)),
+        running_mode=RunningMode.IMAGE,
+        min_face_detection_confidence=limiar,
+        min_pose_detection_confidence=limiar,
+        min_hand_landmarks_confidence=limiar,
     )
 
-    with open(log_path, "w", encoding="utf-8") as log_f:
-        log_f.write(f"Extracao iniciada: {datetime.now().isoformat()}\n\n")
+    with HolisticLandmarker.create_from_options(options) as landmarker:
+        with open(log_path, "w", encoding="utf-8") as log_f:
+            log_f.write(f"Extracao iniciada: {datetime.now().isoformat()}\n\n")
 
-        for caminho, tipo, sinal in tqdm(arquivos, desc="Extraindo landmarks", unit="arquivo"):
-            chave = f"{tipo}/{sinal}"
-            idx_amostra = amostras_por_sinal.get(chave, 0)
-            pasta_saida = landmarks_base / tipo / sinal
-            pasta_saida.mkdir(parents=True, exist_ok=True)
+            for caminho, tipo, sinal in tqdm(arquivos, desc="Extraindo landmarks", unit="arquivo"):
+                chave = f"{tipo}/{sinal}"
+                idx_amostra = amostras_por_sinal.get(chave, 0)
+                pasta_saida = landmarks_base / tipo / sinal
+                pasta_saida.mkdir(parents=True, exist_ok=True)
 
-            try:
-                ext = caminho.suffix.lstrip(".").lower()
+                try:
+                    ext = caminho.suffix.lstrip(".").lower()
 
-                if ext in FORMATOS_IMAGEM:
-                    seq = processar_imagem(caminho, n_frames, n_features, holistic)
-                elif tipo == "estaticos":
-                    seq = processar_video_estatico(caminho, n_frames, n_features, holistic)
-                else:
-                    seq = processar_video_dinamico(caminho, n_frames, n_features, holistic, fps_alvo)
+                    if ext in FORMATOS_IMAGEM:
+                        seq = processar_imagem(caminho, n_frames, n_features, landmarker)
+                    elif tipo == "estaticos":
+                        seq = processar_video_estatico(caminho, n_frames, n_features, landmarker)
+                    else:
+                        seq = processar_video_dinamico(caminho, n_frames, n_features, landmarker, fps_alvo)
 
-                if seq is None:
-                    raise ValueError(f"Nao foi possivel ler: {caminho.name}")
+                    if seq is None:
+                        raise ValueError(f"Nao foi possivel ler: {caminho.name}")
 
-                np.save(pasta_saida / f"sample_{idx_amostra:03d}.npy", seq)
-                amostras_por_sinal[chave] = idx_amostra + 1
-                contadores["ok"] += 1
+                    np.save(pasta_saida / f"sample_{idx_amostra:03d}.npy", seq)
+                    amostras_por_sinal[chave] = idx_amostra + 1
+                    contadores["ok"] += 1
 
-            except Exception as e:
-                contadores["erros"] += 1
-                log_f.write(f"ERRO | {tipo}/{sinal}/{caminho.name} | {e}\n")
-
-    holistic.close()
+                except Exception as e:
+                    contadores["erros"] += 1
+                    log_f.write(f"ERRO | {tipo}/{sinal}/{caminho.name} | {e}\n")
 
     print(f"\nExtracao concluida:")
     print(f"  Processados : {contadores['ok']}")
