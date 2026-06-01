@@ -198,6 +198,8 @@ def main():
     parser.add_argument("--min-amostras-reais", type=int, default=0,
                         help="Remove classes com menos de N amostras reais no treino "
                              "(ex: 20 mantém só as letras estáticas com dados suficientes)")
+    parser.add_argument("--max-amostras", type=int, default=0,
+                        help="Limita amostras por classe (ex: 60) para evitar bias de classes grandes")
     args = parser.parse_args()
 
     tf.random.set_seed(42)
@@ -226,6 +228,21 @@ def main():
 
     print("Normalizando (z-score)...")
     X_train, X_val, X_test = normalizar(X_train, X_val, X_test)
+
+    if args.max_amostras > 0:
+        print(f"Limitando a {args.max_amostras} amostras por classe...")
+        idx_keep = []
+        rng = np.random.default_rng(42)
+        for cls in np.unique(y_train):
+            idx = np.where(y_train == cls)[0]
+            if len(idx) > args.max_amostras:
+                idx = rng.choice(idx, args.max_amostras, replace=False)
+            idx_keep.append(idx)
+        idx_keep = np.concatenate(idx_keep)
+        perm = rng.permutation(len(idx_keep))
+        X_train = X_train[idx_keep[perm]]
+        y_train = y_train[idx_keep[perm]]
+        print(f"  Treino apos cap: {len(X_train)} amostras")
 
     if not args.no_aug:
         print("Data augmentation (upsampling classes < 30 amostras)...")
