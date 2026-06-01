@@ -86,6 +86,7 @@ vocabulario:
     - preciso_de_ajuda
     - socorro
     # Movimento — letras que exigem movimento
+    - C    # Ç (cedilha) — dinâmico em Libras
     - H
     - J
     - X

@@ -22,7 +22,7 @@ FONTES_ESTATICOS = [
 FONTES_DINAMICOS = [
     Path(r"C:\Users\pedro\Downloads\ModuloII\ModuloII"),
     Path(r"C:\Users\pedro\Downloads\ModuloIII\ModuloIII"),
-    Path(r"C:\Users\pedro\Downloads\Movimento"),
+    Path(r"C:\Users\pedro\Downloads\Movimento\Movimento"),
 ]
 
 # Tutoriais e Numeros - copia sao ignorados intencionalmente:
@@ -39,8 +39,23 @@ def remover_acentos(texto: str) -> str:
     return nfkd.encode("ASCII", "ignore").decode("ASCII")
 
 
+def corrigir_encoding_macos(nome: str) -> str:
+    """Remove o par U+2560+char gerado por extração incorreta de zip macOS.
+    O caractere base já está presente antes do marcador U+2560, então só removemos o par."""
+    result = []
+    i = 0
+    while i < len(nome):
+        if nome[i] == "╠" and i + 1 < len(nome):
+            i += 2  # descarta U+2560 e o char seguinte (ambos são artefato)
+        else:
+            result.append(nome[i])
+            i += 1
+    return "".join(result)
+
+
 def normalizar_sinal(nome: str) -> str:
     """Converte nome de pasta para convenção do projeto."""
+    nome = corrigir_encoding_macos(nome)
     nome = remover_acentos(nome).strip()
     # Letra única do alfabeto → maiúsculo
     if len(nome) == 1 and nome.isalpha():
