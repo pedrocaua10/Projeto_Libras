@@ -34,7 +34,7 @@ class Pipeline:
         self._historico_pred: deque = deque(maxlen=estabilizacao)
         self._ultimo_falado: str | None = None
 
-        modelo_path = modelo_path or str(MODELO_DIR / "modelo_dense_77.h5")
+        modelo_path = modelo_path or str(MODELO_DIR / "modelo_dense_85.h5")
         self.modelo = tf.keras.models.load_model(modelo_path, compile=False)
 
         self.mean = np.load(MODELO_DIR / "scaler_mean.npy")

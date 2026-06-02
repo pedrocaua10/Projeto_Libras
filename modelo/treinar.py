@@ -101,8 +101,18 @@ def aumentar_dados(X, y, min_amostras: int = 30, seed: int = 42):
         faltam = min_amostras - n
         while faltam > 0:
             escolha = idx[rng.choice(len(idx), min(faltam, len(idx)), replace=False)]
+            # Ruído gaussiano
             ruido = rng.normal(0, 0.015, X[escolha].shape).astype(np.float32)
             X_extra.append(X[escolha] + ruido)
+            y_extra.append(y[escolha])
+            # Flip horizontal: troca mão esq (0:63) ↔ mão dir (63:126), inverte coord x
+            X_flip = X[escolha].copy()
+            X_flip[..., 0:63], X_flip[..., 63:126] = (
+                X[escolha][..., 63:126].copy(),
+                X[escolha][..., 0:63].copy(),
+            )
+            X_flip[..., 0::3] = 1.0 - X_flip[..., 0::3]  # inverte eixo x
+            X_extra.append(X_flip)
             y_extra.append(y[escolha])
             faltam -= len(escolha)
 

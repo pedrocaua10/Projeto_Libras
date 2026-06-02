@@ -31,6 +31,16 @@ def carregar_amostras(landmarks_base: Path) -> tuple[list, list]:
     return X, y
 
 
+def filtrar_zeros(X: np.ndarray, y: np.ndarray, limiar: float = 0.005):
+    """Remove amostras onde MediaPipe nao detectou nada (vetor quase todo zero).
+    Chamado ANTES do split para que treino E teste fiquem limpos."""
+    mask = np.abs(X).mean(axis=(1, 2)) > limiar
+    removidos = (~mask).sum()
+    if removidos:
+        print(f"  Removidos {removidos} vetores todo-zero ({removidos/len(X)*100:.1f}%)")
+    return X[mask], y[mask]
+
+
 def imprimir_distribuicao(y: np.ndarray, classes: list[str]):
     print("\nDistribuicao de classes no treino:")
     indices, contagens = np.unique(y, return_counts=True)
@@ -59,6 +69,9 @@ def main():
     y = le.fit_transform(y_list)
     classes = le.classes_.tolist()
 
+    print(f"Total bruto       : {len(X)}")
+    print("Filtrando zeros...")
+    X, y = filtrar_zeros(X, y)
     print(f"Total de amostras : {len(X)}")
     print(f"Total de classes  : {len(classes)}")
     print(f"Shape por amostra : {X[0].shape}")
